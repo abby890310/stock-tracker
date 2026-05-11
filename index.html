@@ -241,7 +241,7 @@
     </div>
     
     <div class="stats">
-        <div class="stat-card"><div class="stat-number" id="upCount">--</div><div class="stat-label">漲幅≥9.5%</div></div>
+        <div class="stat-card"><div class="stat-number" id="upCount">--</div><div class="stat-label">漲幅≥9%</div></div>
         <div class="stat-card"><div class="stat-number" id="volumeCount">--</div><div class="stat-label">成交量排行筆數</div></div>
         <div class="stat-card"><div class="stat-number" id="totalStocks">--</div><div class="stat-label">總計個股</div></div>
     </div>
@@ -253,91 +253,125 @@
     </div>
     
     <div class="note">
-        💡 提示：資料來自 Yahoo 股市即時爬取，漲跌幅 ≥ 9.5% 標記為漲停板。點擊「立即刷新」取得最新盤後資料。
+        💡 提示：資料來自 Yahoo 股市即時爬取，漲跌幅 ≥ 9% 標記為漲停板。點擊「立即刷新」取得最新盤後資料。
     </div>
     
     <footer>資料來源：Yahoo 股市 | 免費公開工具 | 每日盤後更新</footer>
 </div>
 
 <script>
-    const PROXY_URL = "https://api.allorigins.win/raw?url=";
+    // 使用多個代理伺服器（輪流使用，避免單一代理失敗）
+    const PROXIES = [
+        "https://api.allorigins.win/raw?url=",
+        "https://cors-anywhere.herokuapp.com/",
+        "https://thingproxy.freeboard.io/fetch/"
+    ];
+    
     const CHANGE_URL = "https://tw.stock.yahoo.com/rank/change-up";
     const VOLUME_URL = "https://tw.stock.yahoo.com/rank/volume";
     
     let currentTab = "up";
     let cachedData = { up: [], volume: [], lastFetch: null, dataDate: "" };
+    let currentProxyIndex = 0;
+    
+    async function fetchWithProxy(url, proxy) {
+        const response = await fetch(proxy + encodeURIComponent(url));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.text();
+    }
     
     async function fetchYahooTable(url, type) {
-        try {
-            const response = await fetch(PROXY_URL + encodeURIComponent(url));
-            const html = await response.text();
-            
-            let dataDate = "";
-            const dateMatch = html.match(/資料時間[：:]\s*(\d{4}\/\d{2}\/\d{2})/);
-            if (dateMatch) dataDate = dateMatch[1];
-            
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, "text/html");
-            const table = doc.querySelector("table");
-            
-            if (!table) return { data: [], dataDate };
-            
-            const rows = table.querySelectorAll("tbody tr, tr");
-            const result = [];
-            
-            for (let row of rows) {
-                const cols = row.querySelectorAll("td");
-                if (cols.length < 5) continue;
+        let lastError = null;
+        
+        // 嘗試所有代理伺服器
+        for (let i = 0; i < PROXIES.length; i++) {
+            try {
+                const proxy = PROXIES[i];
+                console.log(`嘗試使用代理: ${proxy}`);
+                const html = await fetchWithProxy(url, proxy);
                 
-                const rank = cols[0]?.innerText?.trim() || "";
-                if (!/^\d+$/.test(rank)) continue;
+                // 解析資料日期
+                let dataDate = "";
+                const dateMatch = html.match(/資料時間[：:]\s*(\d{4}\/\d{2}\/\d{2})/);
+                if (dateMatch) dataDate = dateMatch[1];
                 
-                const stockFull = cols[1]?.innerText?.trim() || "";
-                const parts = stockFull.split(/\s+/);
-                const stockName = parts[0] || "";
-                let stockCode = parts[1] || "";
-                stockCode = stockCode.replace(/\.TW$/i, "");
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, "text/html");
+                const table = doc.querySelector("table");
                 
-                const price = cols[2]?.innerText?.trim() || "";
-                const change = cols[3]?.innerText?.trim() || "";
-                let changePercent = cols[4]?.innerText?.trim() || "";
-                
-                let volume = "";
-                if (type === "up" && cols.length >= 8) {
-                    volume = cols[7]?.innerText?.trim() || "";
-                } else if (type === "volume") {
-                    volume = cols[7]?.innerText?.trim() || cols[5]?.innerText?.trim() || "";
+                if (!table) {
+                    console.log(`代理 ${proxy} 找不到表格`);
+                    continue;
                 }
                 
-                changePercent = changePercent.replace("%", "");
-                const percentValue = parseFloat(changePercent);
-                const isLimitUp = !isNaN(percentValue) && percentValue >= 9.5;
+                const rows = table.querySelectorAll("tbody tr, tr");
+                const result = [];
                 
-                result.push({
-                    rank: parseInt(rank),
-                    name: stockName,
-                    code: stockCode,
-                    price: price,
-                    change: change,
-                    changePercent: changePercent,
-                    volume: volume,
-                    isLimitUp: isLimitUp
-                });
+                for (let row of rows) {
+                    const cols = row.querySelectorAll("td");
+                    if (cols.length < 5) continue;
+                    
+                    const rank = cols[0]?.innerText?.trim() || "";
+                    if (!/^\d+$/.test(rank)) continue;
+                    
+                    const stockFull = cols[1]?.innerText?.trim() || "";
+                    const parts = stockFull.split(/\s+/);
+                    const stockName = parts[0] || "";
+                    let stockCode = parts[1] || "";
+                    stockCode = stockCode.replace(/\.TW$/i, "");
+                    
+                    const price = cols[2]?.innerText?.trim() || "";
+                    const change = cols[3]?.innerText?.trim() || "";
+                    let changePercent = cols[4]?.innerText?.trim() || "";
+                    
+                    let volume = "";
+                    if (type === "up" && cols.length >= 8) {
+                        volume = cols[7]?.innerText?.trim() || "";
+                    } else if (type === "volume") {
+                        volume = cols[7]?.innerText?.trim() || cols[5]?.innerText?.trim() || "";
+                    }
+                    
+                    changePercent = changePercent.replace("%", "");
+                    const percentValue = parseFloat(changePercent);
+                    // ✅ 這裡改成 9%（原本是 9.5）
+                    const isLimitUp = !isNaN(percentValue) && percentValue >= 9;
+                    
+                    result.push({
+                        rank: parseInt(rank),
+                        name: stockName,
+                        code: stockCode,
+                        price: price,
+                        change: change,
+                        changePercent: changePercent,
+                        volume: volume,
+                        isLimitUp: isLimitUp
+                    });
+                }
+                
+                if (result.length > 0) {
+                    result.sort((a,b) => a.rank - b.rank);
+                    console.log(`成功從 ${proxy} 取得 ${result.length} 筆資料`);
+                    return { data: result.slice(0, 100), dataDate };
+                }
+                
+            } catch (err) {
+                console.log(`代理 ${PROXIES[i]} 失敗:`, err.message);
+                lastError = err;
             }
-            
-            result.sort((a,b) => a.rank - b.rank);
-            return { data: result.slice(0, 100), dataDate };
-            
-        } catch (err) {
-            console.error(`Error:`, err);
-            return { data: [], dataDate: "" };
         }
+        
+        console.error(`所有代理都失敗，type=${type}`);
+        return { data: [], dataDate: "" };
     }
     
     async function fetchData() {
-        document.getElementById("tableContainer").innerHTML = '<div class="loading">🔄 正在爬取最新資料，請稍等約5秒...</div>';
+        const container = document.getElementById("tableContainer");
+        if (container) {
+            container.innerHTML = '<div class="loading">🔄 正在爬取最新資料，請稍等約10秒...</div>';
+        }
         
         try {
+            console.log("開始抓取資料...");
             const [upResult, volumeResult] = await Promise.all([
                 fetchYahooTable(CHANGE_URL, "up"),
                 fetchYahooTable(VOLUME_URL, "volume")
@@ -345,17 +379,31 @@
             
             cachedData.up = upResult.data;
             cachedData.volume = volumeResult.data;
-            cachedData.dataDate = upResult.dataDate || volumeResult.dataDate;
+            cachedData.dataDate = upResult.dataDate || volumeResult.dataDate || "今日";
             cachedData.lastFetch = new Date();
+            
+            console.log(`漲幅榜: ${cachedData.up.length} 筆, 成交量榜: ${cachedData.volume.length} 筆`);
             
             updateStats();
             renderCurrentTab();
             
-            document.getElementById("lastUpdate").innerText = new Date().toLocaleString("zh-TW");
-            document.getElementById("dataDate").innerText = cachedData.dataDate || "今日";
+            const updateTime = new Date().toLocaleString("zh-TW");
+            document.getElementById("lastUpdate").innerText = updateTime;
+            document.getElementById("dataDate").innerText = cachedData.dataDate;
+            
+            if (cachedData.up.length === 0 && cachedData.volume.length === 0) {
+                const errorDiv = document.getElementById("tableContainer");
+                if (errorDiv) {
+                    errorDiv.innerHTML = '<div class="error-msg">⚠️ 暫時無法取得資料，可能是代理伺服器限制。<br>請稍後再試，或點擊「立即刷新」重試。</div>';
+                }
+            }
             
         } catch (err) {
-            document.getElementById("tableContainer").innerHTML = `<div class="error-msg">❌ 資料擷取失敗：${err.message}<br>請稍後再試或檢查網路連線</div>`;
+            console.error("抓取失敗:", err);
+            const errorDiv = document.getElementById("tableContainer");
+            if (errorDiv) {
+                errorDiv.innerHTML = `<div class="error-msg">❌ 資料擷取失敗：${err.message}<br>請稍後再試或檢查網路連線</div>`;
+            }
         }
     }
     
@@ -379,7 +427,7 @@
         
         for (let stock of data) {
             const percentVal = parseFloat(stock.changePercent);
-            const isLimit = !isNaN(percentVal) && percentVal >= 9.5;
+            const isLimit = !isNaN(percentVal) && percentVal >= 9;
             const percentClass = (percentVal > 0) ? "positive" : "";
             const limitBadge = isLimit ? '<span class="limit-up">漲停</span>' : '';
             
@@ -400,6 +448,7 @@
     
     function renderCurrentTab() {
         const container = document.getElementById("tableContainer");
+        if (!container) return;
         
         if (currentTab === "up") {
             container.innerHTML = renderTable(cachedData.up);
@@ -416,6 +465,7 @@
         }
     }
     
+    // 頁籤切換
     document.querySelectorAll(".tab").forEach(tab => {
         tab.addEventListener("click", () => {
             document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -425,6 +475,7 @@
         });
     });
     
+    // 自動抓取
     fetchData();
 </script>
 </body>
