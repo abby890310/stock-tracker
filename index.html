@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>台股漲停&成交量追蹤 | 每日自動更新</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            padding: 16px;
+            color: #1e293b;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        
+        .update-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        .refresh-btn {
+            background: white;
+            color: #1e3c72;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .refresh-btn:active {
+            transform: scale(0.96);
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            background: white;
+            padding: 12px 24px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .tab.active {
+            background: #2a5298;
+            color: white;
+            border-color: #2a5298;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 12px 20px;
+            flex: 1;
+            min-width: 100px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: #2a5298;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+        
+        .table-wrapper {
+            background: white;
+            border-radius: 20px;
+            overflow-x: auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        th {
+            background: #f1f5f9;
+            padding: 14px 10px;
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        td {
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .stock-name {
+            font-weight: 600;
+            text-align: left;
+        }
+        
+        .stock-code {
+            font-size: 0.7rem;
+            color: #64748b;
+            display: block;
+        }
+        
+        .positive {
+            color: #dc2626;
+            font-weight: 600;
+        }
+        
+        .limit-up {
+            background: #fee2e2;
+            font-weight: bold;
+            color: #dc2626;
+            border-radius: 4px;
+            padding: 2px 6px;
+            display: inline-block;
+            font-size: 0.7rem;
+            margin-left: 6px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #64748b;
+        }
+        
+        .error-msg {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            th, td { padding: 8px 4px; font-size: 0.75rem; }
+            .tab { padding: 8px 16px; font-size: 0.85rem; }
+            .stat-number { font-size: 1.2rem; }
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        
+        .note {
+            background: #fef9c3;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            margin-top: 12px;
+            color: #854d0e;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>
+            📊 台股即時追蹤
+            <span class="badge">漲停 & 成交量 TOP100</span>
+        </h1>
+        <div class="update-info">
+            <span>🕒 最後更新: <span id="lastUpdate">--</span></span>
+            <span>📅 資料日期: <span id="dataDate">--</span></span>
+            <button class="refresh-btn" onclick="fetchData()">🔄 立即刷新</button>
+        </div>
+    </div>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="up">🔥 漲幅排行</div>
+        <div class="tab" data-tab="volume">📈 成交量排行 TOP100</div>
+        <div class="tab" data-tab="both">📋 綜合檢視</div>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-card"><div class="stat-number" id="upCount">--</div><div class="stat-label">漲幅≥9.5%</div></div>
+        <div class="stat-card"><div class="stat-number" id="volumeCount">--</div><div class="stat-label">成交量排行筆數</div></div>
+        <div class="stat-card"><div class="stat-number" id="totalStocks">--</div><div class="stat-label">總計個股</div></div>
+    </div>
+    
+    <div class="table-wrapper">
+        <div id="tableContainer">
+            <div class="loading">📡 載入中，請稍候...</div>
+        </div>
+    </div>
+    
+    <div class="note">
+        💡 提示：資料來自 Yahoo 股市即時爬取，漲跌幅 ≥ 9.5% 標記為漲停板。點擊「立即刷新」取得最新盤後資料。
+    </div>
+    
+    <footer>資料來源：Yahoo 股市 | 免費公開工具 | 每日盤後更新</footer>
+</div>
+
+<script>
+    const PROXY_URL = "https://api.allorigins.win/raw?url=";
+    const CHANGE_URL = "https://tw.stock.yahoo.com/rank/change-up";
+    const VOLUME_URL = "https://tw.stock.yahoo.com/rank/volume";
+    
+    let currentTab = "up";
+    let cachedData = { up: [], volume: [], lastFetch: null, dataDate: "" };
+    
+    async function fetchYahooTable(url, type) {
+        try {
+            const response = await fetch(PROXY_URL + encodeURIComponent(url));
+            const html = await response.text();
+            
+            let dataDate = "";
+            const dateMatch = html.match(/資料時間[：:]\s*(\d{4}\/\d{2}\/\d{2})/);
+            if (dateMatch) dataDate = dateMatch[1];
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const table = doc.querySelector("table");
+            
+            if (!table) return { data: [], dataDate };
+            
+            const rows = table.querySelectorAll("tbody tr, tr");
+            const result = [];
+            
+            for (let row of rows) {
+                const cols = row.querySelectorAll("td");
+                if (cols.length < 5) continue;
+                
+                const rank = cols[0]?.innerText?.trim() || "";
+                if (!/^\d+$/.test(rank)) continue;
+                
+                const stockFull = cols[1]?.innerText?.trim() || "";
+                const parts = stockFull.split(/\s+/);
+                const stockName = parts[0] || "";
+                let stockCode = parts[1] || "";
+                stockCode = stockCode.replace(/\.TW$/i, "");
+                
+                const price = cols[2]?.innerText?.trim() || "";
+                const change = cols[3]?.innerText?.trim() || "";
+                let changePercent = cols[4]?.innerText?.trim() || "";
+                
+                let volume = "";
+                if (type === "up" && cols.length >= 8) {
+                    volume = cols[7]?.innerText?.trim() || "";
+                } else if (type === "volume") {
+                    volume = cols[7]?.innerText?.trim() || cols[5]?.innerText?.trim() || "";
+                }
+                
+                changePercent = changePercent.replace("%", "");
+                const percentValue = parseFloat(changePercent);
+                const isLimitUp = !isNaN(percentValue) && percentValue >= 9.5;
+                
+                result.push({
+                    rank: parseInt(rank),
+                    name: stockName,
+                    code: stockCode,
+                    price: price,
+                    change: change,
+                    changePercent: changePercent,
+                    volume: volume,
+                    isLimitUp: isLimitUp
+                });
+            }
+            
+            result.sort((a,b) => a.rank - b.rank);
+            return { data: result.slice(0, 100), dataDate };
+            
+        } catch (err) {
+            console.error(`Error:`, err);
+            return { data: [], dataDate: "" };
+        }
+    }
+    
+    async function fetchData() {
+        document.getElementById("tableContainer").innerHTML = '<div class="loading">🔄 正在爬取最新資料，請稍等約5秒...</div>';
+        
+        try {
+            const [upResult, volumeResult] = await Promise.all([
+                fetchYahooTable(CHANGE_URL, "up"),
+                fetchYahooTable(VOLUME_URL, "volume")
+            ]);
+            
+            cachedData.up = upResult.data;
+            cachedData.volume = volumeResult.data;
+            cachedData.dataDate = upResult.dataDate || volumeResult.dataDate;
+            cachedData.lastFetch = new Date();
+            
+            updateStats();
+            renderCurrentTab();
+            
+            document.getElementById("lastUpdate").innerText = new Date().toLocaleString("zh-TW");
+            document.getElementById("dataDate").innerText = cachedData.dataDate || "今日";
+            
+        } catch (err) {
+            document.getElementById("tableContainer").innerHTML = `<div class="error-msg">❌ 資料擷取失敗：${err.message}<br>請稍後再試或檢查網路連線</div>`;
+        }
+    }
+    
+    function updateStats() {
+        const upCount = cachedData.up.filter(s => s.isLimitUp).length;
+        document.getElementById("upCount").innerText = upCount;
+        document.getElementById("volumeCount").innerText = cachedData.volume.length;
+        document.getElementById("totalStocks").innerText = cachedData.up.length + cachedData.volume.length;
+    }
+    
+    function renderTable(data, showVolumeSource = false) {
+        if (!data || data.length === 0) {
+            return '<div class="loading">📭 暫無資料，請點擊「立即刷新」</div>';
+        }
+        
+        let html = `<table>
+            <thead>
+                <tr><th>排名</th><th>股名</th><th>股價</th><th>漲跌</th><th>漲跌幅(%)</th><th>成交量(張)</th>${showVolumeSource ? '<th>來源</th>' : ''}</tr>
+            </thead>
+            <tbody>`;
+        
+        for (let stock of data) {
+            const percentVal = parseFloat(stock.changePercent);
+            const isLimit = !isNaN(percentVal) && percentVal >= 9.5;
+            const percentClass = (percentVal > 0) ? "positive" : "";
+            const limitBadge = isLimit ? '<span class="limit-up">漲停</span>' : '';
+            
+            html += `<tr>
+                <td>${stock.rank}</td>
+                <td class="stock-name">${stock.name}${stock.code ? `<span class="stock-code">${stock.code}</span>` : ''}</td>
+                <td>${stock.price}</td>
+                <td class="${percentClass}">${stock.change}</td>
+                <td class="${percentClass}">${stock.changePercent}% ${limitBadge}</td>
+                <td>${stock.volume || '-'}</td>
+                ${showVolumeSource ? `<td>${stock.source || '一般'}</td>` : ''}
+            </tr>`;
+        }
+        
+        html += `</tbody>able`;
+        return html;
+    }
+    
+    function renderCurrentTab() {
+        const container = document.getElementById("tableContainer");
+        
+        if (currentTab === "up") {
+            container.innerHTML = renderTable(cachedData.up);
+        } 
+        else if (currentTab === "volume") {
+            container.innerHTML = renderTable(cachedData.volume);
+        }
+        else if (currentTab === "both") {
+            const upWithSource = cachedData.up.map(s => ({ ...s, source: "漲幅榜" }));
+            const volWithSource = cachedData.volume.map(s => ({ ...s, source: "成交量榜" }));
+            const combined = [...upWithSource, ...volWithSource];
+            combined.sort((a,b) => a.rank - b.rank);
+            container.innerHTML = renderTable(combined, true);
+        }
+    }
+    
+    document.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            currentTab = tab.dataset.tab;
+            renderCurrentTab();
+        });
+    });
+    
+    fetchData();
+</script>
+</body>
+</html>
